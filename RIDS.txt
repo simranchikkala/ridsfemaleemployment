@@ -1,0 +1,819 @@
+"""
+Created on Thu Mar  7 11:19:34 2024
+
+@author: simra
+"""
+#IMPORTING LIBRARIES
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+#IMPORTING DATASET
+femwo=pd.read_csv("RIDS.csv")
+
+#DROPPING COLUMNS/VALUES NOT USEFUL TO US
+femwo=femwo.drop(["Table Code",'Unnamed: 0','A - Agricultural Labourers', 'B','C - HHI', 'C - Non HHI', 'D & E', 'F', 'G - HHI', 'G - Non HHI', 'H','I', 'J - HHI', 'J - Non HHI', 'K to M', 'N to O', 'P to Q','R to U - HHI', 'R to U - Non HHI'],axis=1)
+
+femwo=femwo[femwo["Total/Rural/Urban"]!="Total"]
+femwo=femwo[femwo['Female Main Workers/Marginal Workers']!="Total Female Workers"]
+femwo=femwo[femwo["Marital Status"]!="Total"]
+femwo=femwo[femwo["Area Name"]!="India"]
+
+femwo.rename(columns={'Number of Workers': 'Workers'}, inplace=True)
+femwo.rename(columns={'Marital Status': 'MaritalStatus'}, inplace=True)
+
+#CREATING REGIONS COLUMN
+regions={"State - Andaman & Nicobar Islands":"South","State - Andhra Pradesh":"South","State - Arunachal Pradesh":"East","State - Assam":"East","State - Bihar":"North","State - Chandigarh":"North","State - Chhattisgarh":"Central","State - Dadra & Nagar Haveli":"West","State - Daman & Diu":"West","State - Goa":"West","State - Gujarat":"West","State - Haryana":"North","State - Himachal Pradesh":"North","State - Jammu & Kashmir":"North","State - Jharkhand":"North","State - Karnataka":"South","State - Kerala":"South","State - Lakshadweep":"South","State - Madhya Pradesh":"Central","State - Maharashtra":"West","State - Manipur":"East","State - Meghalaya":"East","State - Mizoram":"East","State - NCT of Delhi":"North","State - Nagaland":"East","State - Odisha":"East","State - Puducherry":"South","State - Punjab":"North","State - Rajasthan":"North","State - Sikkim":"East","State - Tamil Nadu":"South","State - Tripura":"East","State - Uttar Pradesh":"North","State - Uttarakhand":"North","State - West Bengal":"East"}
+femwo["Region"]=""
+for state, region in regions.items():
+    femwo.loc[femwo["Area Name"] == state, "Region"] = region
+
+#EDA/DESCRIPTIVE STATISTICS
+femwo.isnull().sum()
+print(femwo.head())
+print(femwo.info())
+print("The dimensions of the dataset are: ",femwo.shape)
+print("The size of the dataset is: ",femwo.size)
+stats=pd.DataFrame(femwo.describe())
+print(stats)
+
+#VISUALISATIONS
+# Distribution of Population by Area
+plt.figure(figsize=(10, 6))
+sns.histplot(femwo['Female - Population'], kde=True)
+plt.title('Distribution of Female Population by Area')
+plt.xlabel('Female Population')
+plt.ylabel('Frequency')
+plt.show()
+
+# Workers vs. Population
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=femwo, x='Female - Population', y='Workers')
+plt.title('Workers vs. Population')
+plt.xlabel('Female Population')
+plt.ylabel('Total Workers')
+plt.show()
+
+
+# Region-wise Worker Distribution
+plt.figure(figsize=(10, 6))
+sns.boxplot(data=femwo, x='Region', y='Total Female - Main/Marginal Workers')
+plt.title('Region-wise Worker Distribution')
+plt.xlabel('Region')
+plt.ylabel('Total Female - Main/Marginal Workers')
+plt.show()
+
+# Number of Workers per Industry
+plt.figure(figsize=(12, 8))
+industry_workers = femwo.groupby('Industry')['Workers'].sum()
+sns.barplot(x=industry_workers.values, y=industry_workers.index)
+plt.title('Number of Workers per Industry')
+plt.xlabel('Sum of Workers')
+plt.ylabel('Industry')
+plt.show()
+
+# Number of Workers per Marital Status
+plt.figure(figsize=(10, 6))
+marital_workers = femwo.groupby('MaritalStatus')['Workers'].sum()
+sns.barplot(x=marital_workers.values, y=marital_workers.index)
+plt.title('Number of Workers per Marital Status')
+plt.xlabel('Sum of Workers')
+plt.ylabel('Marital Status')
+plt.show()
+
+# 3. Number of Workers per Area Type
+plt.figure(figsize=(10, 6))
+area_workers = femwo.groupby('Total/Rural/Urban')['Workers'].sum()
+sns.barplot(x=area_workers.values, y=area_workers.index)
+plt.title('Number of Workers per Area Type')
+plt.xlabel('Sum of Workers')
+plt.ylabel('Area Type')
+plt.show()
+
+# 4. Number of Workers per Region
+plt.figure(figsize=(12, 8))
+region_workers = femwo.groupby('Region')['Workers'].sum()
+sns.barplot(x=region_workers.values, y=region_workers.index)
+plt.title('Number of Workers per Region')
+plt.xlabel('Sum of Workers')
+plt.ylabel('Region')
+plt.show()
+
+# 5. Heatmap of Workers per Industry and Marital Status
+plt.figure(figsize=(12, 10))
+industry_marital_workers = femwo.groupby(['Industry', 'MaritalStatus'])['Workers'].sum().unstack()
+sns.heatmap(industry_marital_workers, cmap='Blues')
+plt.title('Heatmap of Workers per Industry and Marital Status')
+plt.xlabel('Marital Status')
+plt.ylabel('Industry')
+plt.show()
+
+# 6. Boxplot of Workers per Industry
+plt.figure(figsize=(12, 8))
+sns.boxplot(data=femwo, x='Industry', y='Workers')
+plt.title('Boxplot of Workers per Industry')
+plt.xlabel('Industry')
+plt.ylabel('Workers')
+plt.xticks(rotation=90)
+plt.show()
+#Bocplot according to Marital status
+plt.figure(figsize=(12, 8))
+sns.boxplot(data=femwo, x='MaritalStatus', y='response_standardized')
+plt.title('Boxplot of Marital Status per Industry')
+plt.xlabel('Marital Status')
+plt.ylabel('Workers')
+plt.xticks(rotation=90)
+plt.show()
+
+#Stacked Bar Plot based on Marital Status and Area Type
+worker_column = 'Total/Rural/Urban'  
+marital_status_column = 'MaritalStatus'  
+value_column='Workers'
+
+pivot_table = femwo.pivot_table(values=value_column, index=worker_column, columns=marital_status_column, aggfunc='sum')
+pivot_table_reset = pivot_table.reset_index()
+melted_pivot = pivot_table_reset.melt(id_vars=worker_column, var_name=marital_status_column, value_name='Count')
+
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=worker_column, y='Count', hue=marital_status_column, data=melted_pivot, palette='viridis')
+plt.xlabel(worker_column)
+plt.ylabel('Count')
+plt.title('Stacked Bar Plot of Workers based on Marital Status and Area Type')
+plt.legend(title=marital_status_column)
+plt.show()
+
+#Stacked Bar Plot based on Marital Status and Industry
+worker_column = 'Industry'  
+marital_status_column = 'MaritalStatus' 
+value_column='Workers'
+
+pivot_table = femwo.pivot_table(values=value_column, index=worker_column, columns=marital_status_column, aggfunc='sum')
+pivot_table_reset = pivot_table.reset_index()
+melted_pivot = pivot_table_reset.melt(id_vars=worker_column, var_name=marital_status_column, value_name='Count')
+
+
+plt.figure(figsize=(15, 6))
+sns.barplot(x=worker_column, y='Count', hue=marital_status_column, data=melted_pivot, palette='viridis')
+plt.xlabel(worker_column)
+plt.ylabel('Count')
+plt.title('Stacked Bar Plot of Workers based on Marital Status and Industry')
+plt.legend(title=marital_status_column)
+plt.xticks(rotation=90)
+plt.show()
+
+#Stacked Barplot for Marital Status and Region
+worker_column = 'Region'
+marital_status_column = 'MaritalStatus' 
+value_column='Workers'
+
+pivot_table = femwo.pivot_table(values=value_column, index=worker_column, columns=marital_status_column, aggfunc='sum')
+pivot_table_reset = pivot_table.reset_index()
+melted_pivot = pivot_table_reset.melt(id_vars=worker_column, var_name=marital_status_column, value_name='Count')
+
+
+plt.figure(figsize=(12, 6))
+sns.barplot(x=worker_column, y='Count', hue=marital_status_column, data=melted_pivot, palette='viridis')
+plt.xlabel(worker_column)
+plt.ylabel('Count')
+plt.title('Stacked Bar Plot of Workers based on Marital Status and Region')
+plt.legend(title=marital_status_column)
+plt.show()
+
+#Correlation Heatmap
+plt.figure(figsize=(14, 10))
+sns.heatmap(femwo.corr(), annot=True, cmap='coolwarm', fmt=".2f")
+plt.title('Correlation Heatmap')
+plt.show()
+
+import statsmodels.api as sm
+import scipy.stats as stats
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import mean_squared_error, accuracy_score
+from sklearn.preprocessing import LabelEncoder
+from statsmodels.formula.api import ols
+from scipy.stats import f
+from scipy.stats import f_oneway
+
+#PERFORMING ONE WAY ANOVA
+
+# One-way ANOVA for Region
+one_way_anova_region = ols('Workers ~ C(Region)', data=femwo).fit()
+anova_table_region = sm.stats.anova_lm(one_way_anova_region, typ=2)
+print("One-way ANOVA for Region:")
+print(anova_table_region)
+
+f_tabulated = f.ppf(0.99,4,12595)
+print("F-tabulated value:", f_tabulated)
+
+#F cal
+f_value = anova_table_region['F'].iloc[0]
+p_value = anova_table_region['PR(>F)'].iloc[0]  
+print("F-statistic:", f_value)
+print("p-value:", p_value)
+
+if f_value>=f_tabulated:
+    print("Reject H0 in favour of H1 at 1% LOS ")
+
+#THERE IS SIGNIFICANT DIFFERENCE DUE TO REGION
+
+# One-way ANOVA for Industry
+one_way_anova_industry = ols('Workers ~ C(Industry)', data=femwo).fit()
+anova_table_industry = sm.stats.anova_lm(one_way_anova_industry, typ=2)
+print("\nOne-way ANOVA for Industry:")
+print(anova_table_industry)
+
+f_tabulated = f.ppf(0.99,4,12595)
+print("F-tabulated value:", f_tabulated)
+
+#F cal
+f_value = anova_table_industry['F'].iloc[0]
+p_value = anova_table_industry['PR(>F)'].iloc[0]  
+print("F-statistic:", f_value)
+print("p-value:", p_value)
+
+if f_value>=f_tabulated:
+    print("Reject H0 in favour of H1 at 1% LOS ")
+
+#THERE IS SIGNIFICANT DIFFERENCE DUE TO INDUSTRY
+
+# One-way ANOVA for Marital Status
+N = len(femwo)
+k = len(femwo['MaritalStatus'].unique())
+df_treatment = k - 1
+df_error = N - k
+
+one_way_anova_marital_status = ols('Workers ~ C(MaritalStatus)', data=femwo).fit()
+anova_table_marital_status = sm.stats.anova_lm(one_way_anova_marital_status, typ=2)
+print("\nOne-way ANOVA for Marital Status:")
+print(anova_table_marital_status)
+
+f_tabulated = f.ppf(0.99,df_treatment,df_error)
+print("F-tabulated value:", f_tabulated)
+
+#F cal
+f_value = anova_table_marital_status['F'].iloc[0]
+p_value = anova_table_marital_status['PR(>F)'].iloc[0]  
+print("F-statistic:", f_value)
+print("p-value:", p_value)
+
+if f_value>=f_tabulated:
+    print("Reject H0: Effects of Marital Status are not equal in favour of H1 at 1% LOS ")
+
+
+#THERE IS SIGNIFICANT DIFFERENCE DUE TO MARITAL STATUS
+
+#T TEST IN ONE WAY 
+from itertools import combinations
+from scipy.stats import ttest_ind
+
+categories = list(femwo["Region"].unique())
+for pair in combinations(categories, 2):
+    category1 = pair[0]
+    category2 = pair[1]
+    data_cat1 = femwo[femwo['Region'] == category1]['Workers']
+    data_cat2 = femwo[femwo['Region'] == category2]['Workers']
+    t_statistic, p_value = ttest_ind(data_cat1, data_cat2)
+    if p_value>0.01:
+        print(f"between {category1} and {category2}")
+
+categoriesi = list(femwo["Industry"].unique())
+for pair in combinations(categoriesi, 2):
+    category1 = pair[0]
+    category2 = pair[1]
+    data_cat1 = femwo[femwo['Industry'] == category1]['Workers']
+    data_cat2 = femwo[femwo['Industry'] == category2]['Workers']
+    t_statistic, p_value = ttest_ind(data_cat1, data_cat2)
+    if p_value>0.01:
+     print(f" between {category1} and {category2}:")
+    
+    
+categoriesm = list(femwo["MaritalStatus"].unique())
+for pair in combinations(categoriesm, 2):
+    category1 = pair[0]
+    category2 = pair[1]
+    data_cat1 = femwo[femwo['MaritalStatus'] == category1]['Workers']
+    data_cat2 = femwo[femwo['MaritalStatus'] == category2]['Workers']
+    t_statistic, p_value = ttest_ind(data_cat1, data_cat2)
+    if p_value>0.01:
+     print(f"T-test between {category1} and {category2}")
+
+
+#PERFORMING TWO WAY ANOVA
+
+# Two-way ANOVA for Region and Industry
+two_way_anova_region_industry = ols('Workers ~ C(Region) * C(Industry)', data=femwo).fit()
+anova_table_region_industry = sm.stats.anova_lm(two_way_anova_region_industry, typ=2)
+print("\nTwo-way ANOVA for Region and Industry:")
+print(anova_table_region_industry)
+
+f_values = anova_table_region_industry['F']
+p_values = anova_table_region_industry['PR(>F)']
+
+df1_region = anova_table_region_industry.loc['C(Region)', 'df']
+df1_industry = anova_table_region_industry.loc['C(Industry)', 'df']
+df1_interaction = anova_table_region_industry.loc['C(Region):C(Industry)', 'df']
+df2 = anova_table_region_industry.loc['Residual', 'df']
+
+
+alpha = 0.01
+def perform_f_test(f_value, p_value, df1, df2, alpha):
+    critical_f = stats.f.ppf(1 - alpha, df1, df2)
+    if f_value > critical_f:
+        print("Reject H0 in favour of H1 at 0.01 LOS")
+        print(f"P-value: {p_value:.4f}")
+    else:
+        print("Do Not Reject H0 in favour of H1 at 0.01 LOS")
+        print(f"P-value: {p_value:.4f}")
+
+print("\nF-test for Region:")
+perform_f_test(f_values['C(Region)'], p_values['C(Region)'], df1_region, df2, alpha)
+print("\nF-test for Industry:")
+perform_f_test(f_values['C(Industry)'], p_values['C(Industry)'], df1_industry, df2, alpha)
+print("\nF-test for Interaction:")
+perform_f_test(f_values['C(Region):C(Industry)'], p_values['C(Region):C(Industry)'], df1_interaction, df2, alpha)
+
+
+# Two-way ANOVA for Region and Marital Status
+two_way_anova_region_marital_status = ols('Workers ~ C(Region) * C(MaritalStatus)', data=femwo).fit()
+anova_table_region_marital_status = sm.stats.anova_lm(two_way_anova_region_marital_status, typ=2)
+print("\nTwo-way ANOVA for Region and Marital Status:")
+print(anova_table_region_marital_status)
+
+f_values = anova_table_region_marital_status['F']
+p_values = anova_table_region_marital_status['PR(>F)']
+
+df1_region = anova_table_region_marital_status.loc['C(Region)', 'df']
+df1_maritalstatus = anova_table_region_marital_status.loc['C(MaritalStatus)', 'df']
+df1_interaction = anova_table_region_marital_status.loc['C(Region):C(MaritalStatus)', 'df']
+df2 = anova_table_region_marital_status.loc['Residual', 'df']
+
+print("\nF-test for Region:")
+perform_f_test(f_values['C(Region)'], p_values['C(Region)'], df1_region, df2, alpha)
+print("\nF-test for Marital Status:")
+perform_f_test(f_values['C(MaritalStatus)'], p_values['C(MaritalStatus)'], df1_maritalstatus, df2, alpha)
+print("\nF-test for Interaction:")
+perform_f_test(f_values['C(Region):C(MaritalStatus)'], p_values['C(Region):C(MaritalStatus)'], df1_interaction, df2, alpha)
+
+
+
+# Two-way ANOVA for Industry and Marital Status
+two_way_anova_industry_marital_status = ols('Workers ~ C(Industry) * C(MaritalStatus)', data=femwo).fit()
+anova_table_industry_marital_status = sm.stats.anova_lm(two_way_anova_industry_marital_status, typ=2)
+print("\nTwo-way ANOVA for Industry and Marital Status:")
+print(anova_table_industry_marital_status)
+
+
+f_values = anova_table_industry_marital_status['F']
+p_values = anova_table_industry_marital_status['PR(>F)']
+
+df1_region = anova_table_industry_marital_status.loc['C(Industry)', 'df']
+df1_maritalstatus = anova_table_industry_marital_status.loc['C(MaritalStatus)', 'df']
+df1_interaction = anova_table_industry_marital_status.loc['C(Industry):C(MaritalStatus)', 'df']
+df2 = anova_table_industry_marital_status.loc['Residual', 'df']
+
+print("\nF-test for Industry:")
+perform_f_test(f_values['C(Industry)'], p_values['C(Industry)'], df1_region, df2, alpha)
+print("\nF-test for Marital Status:")
+perform_f_test(f_values['C(MaritalStatus)'], p_values['C(MaritalStatus)'], df1_maritalstatus, df2, alpha)
+print("\nF-test for Interaction:")
+perform_f_test(f_values['C(Industry):C(MaritalStatus)'], p_values['C(Industry):C(MaritalStatus)'], df1_interaction, df2, alpha)
+
+#T-TEST FOR TWO WAY
+from scipy.stats import ttest_ind
+from itertools import combinations
+
+def pairwise_t_tests_interaction(data, factor1, factor2, value_column, alpha=0.05):
+    interaction_factor = data[factor1].astype(str) + ":" + data[factor2].astype(str)
+    data['Interaction'] = interaction_factor
+    interaction_levels = data['Interaction'].unique()
+    results = []
+    for i in range(len(interaction_levels)):
+        for j in range(i + 1, len(interaction_levels)):
+            level1 = interaction_levels[i]
+            level2 = interaction_levels[j]
+            group1 = data[data['Interaction'] == level1][value_column]
+            group2 = data[data['Interaction'] == level2][value_column]
+            t_stat, p_value = stats.ttest_ind(group1, group2)
+            if p_value <= alpha:
+                results.append((level1,level2))
+            print(results)
+
+
+pairwise_t_tests_interaction(femwo, "Region", "Industry", "Workers")
+# =============================================================================
+# 
+# def pairwise_t_tests(data, factor_name, value_column, alpha=alpha):
+#     factor_levels = data[factor_name].unique()
+#     for level1, level2 in combinations(factor_levels, 2):
+#         group1 = data[data[factor_name] == level1][value_column]
+#         group2 = data[data[factor_name] == level2][value_column]
+#         t_stat, p_value = stats.ttest_ind(group1, group2)
+#         if p_value > 0.01:
+#             print(f"for {factor_name}={level1} and {factor_name}={level2} ")
+# 
+# value_column = 'Workers'  
+# 
+# pairwise_t_tests(femwo, 'Region', value_column, alpha)
+# pairwise_t_tests(femwo, 'Industry', value_column, alpha)
+# pairwise_t_tests(femwo, 'MaritalStatus', value_column, alpha)
+# =============================================================================
+# =============================================================================
+# 
+# alpha = 0.01
+# levels_region = femwo['Region'].unique()
+# levels_industry = femwo['Industry'].unique()
+# 
+# for region in levels_region:
+#     for industry in levels_industry:
+#         data_group1 = femwo[(femwo['Region'] == region) & (femwo['Industry'] == industry)]['Workers']
+#         for region2 in levels_region:
+#             for industry2 in levels_industry:
+#                 if (region2 != region) or (industry2 != industry):
+#                     data_group2 = femwo[(femwo['Region'] == region2) & (femwo['Industry'] == industry2)]['Workers']
+#                     t_statistic, p_value = ttest_ind(data_group1, data_group2)
+#                     df = len(data_group1) + len(data_group2) - 2
+#                     critical_value = t.ppf(1 - alpha / 2, df)
+#                     if abs(t_statistic) < critical_value:
+#                         print(f"{region}-{industry} vs {region2}-{industry2}: T-statistic = {t_statistic}, Significant")
+# =============================================================================
+# =============================================================================
+# from scipy.stats import ttest_ind
+# levels_region = femwo['Region'].unique()
+# levels_industry = femwo['Industry'].unique()
+# s
+# for region in levels_region:
+#     for industry in levels_industry:
+#         data_group1 = femwo[(femwo['Region'] == region) & (femwo['Industry'] == industry)]['Workers']
+#         for region2 in levels_region:
+#             for industry2 in levels_industry:
+#                 if (region2 != region) or (industry2 != industry):
+#                     data_group2 = femwo[(femwo['Region'] == region2) & (femwo['Industry'] == industry2)]['Workers']
+#                     t_statistic, p_value = ttest_ind(data_group1, data_group2)
+#                     print(f"T-test between {region}-{industry} and {region2}-{industry2}:")
+#                     print(f"T-statistic: {t_statistic}")
+#                     print(f"P-value: {p_value}")
+#                     print("")
+# 
+# =============================================================================
+
+#PERFORMING THREE WAY ANOVA
+
+# Three-way ANOVA for Region, Industry, and Marital Status
+three_way_anova = ols('Workers ~ C(Region) * C(Industry) * C(MaritalStatus)', data=femwo).fit()
+anova_table_three_way = sm.stats.anova_lm(three_way_anova, typ=2)
+print("\nThree-way ANOVA for Region, Industry, and Marital Status:")
+print(anova_table_three_way)
+
+def interpret_anova(anova_table_three_way, alpha=0.01):
+    print("ANOVA Results Interpretation:")
+    for factor, row in anova_table_three_way.iterrows():
+        f_value = row['F']
+        p_value = row['PR(>F)']
+        print(f"Factor/Interaction: {factor}")
+        print(f"  F-value: {f_value}")
+        print(f"  p-value: {p_value}")
+        if p_value < alpha:
+            print("  Null hypothesis rejected: Significant effect.")
+        else:
+            print("  Null hypothesis accepted: No significant effect.")
+        print()  # For readability
+interpret_anova(anova_table_three_way)
+
+def pairwise_t_tests_three_way(data, factor1, factor2, value_column, alpha=0.01):
+    levels1 = data[factor1].unique()
+    levels2 = data[factor2].unique()
+
+    for level1 in levels1:
+        for level2 in levels2:
+            group1 = data[(data[factor1] == level1) & (data[factor2] == level2)][value_column]
+            group2 = data[(data[factor1] != level1) & (data[factor2] != level2)][value_column]
+            t_stat, p_value = stats.ttest_ind(group1, group2)
+            print(f"Pairwise t-test for {factor1}={level1} and {factor2}={level2}:")
+            if p_value > alpha:
+                print("Reject H0 in favour of H1 at 0.01 LOS")
+                print(f"P-value: {p_value:.4f}")
+            else:
+                print("Do Not Reject H0 in favour of H1 at 0.01 LOS")
+                print(f"P-value: {p_value:.4f}")
+                
+
+value_column = 'Workers'
+pairwise_t_tests_three_way(femwo, 'Region', 'Industry', value_column, alpha)
+pairwise_t_tests_three_way(femwo, 'Industry', 'MaritalStatus', value_column, alpha)
+pairwise_t_tests_three_way(femwo, 'Region', 'MaritalStatus', value_column, alpha)
+
+#CHECKING ASSUMPTIONS FOR ANOVA
+
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+from scipy import stats
+from scipy.stats import shapiro,kstest, anderson
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+
+# Normalize the response/dependent column
+femwo['response_standardized'] = scaler.fit_transform(femwo[['Workers']])
+
+# Assumptions for ANOVA
+# 1. Normality
+# Shapiro-Wilk test for normality of residuals
+model = ols('Workers ~ C(Region)', data=femwo).fit()
+residuals = model.resid
+shapiro_stat, shapiro_p_value = shapiro(residuals)
+print("Shapiro-Wilk Test p-value:", shapiro_p_value)
+
+#Since Shapiro Wilk Test is not accurate when n>5000
+# Perform the Kolmogorov-Smirnov test
+
+ks_stat, ks_p_value = kstest(residuals, 'norm')
+print(f"Kolmogorov-Smirnov Test: Statistic = {ks_stat}, P-value = {ks_p_value}")
+
+
+# Perform the Anderson-Darling test
+anderson_result = anderson(residuals, 'norm')
+print(f"Anderson-Darling Test: Statistic = {anderson_result.statistic}, Critical values = {anderson_result.critical_values}")
+print(f"Significance Level = {anderson_result.significance_level}")
+
+# 2. Homogeneity of Variance
+# Levene's test for homogeneity of variances
+group_column = 'Region'  
+groups = [group['Workers'].values for name, group in femwo.groupby(group_column)]
+levene_test = stats.levene(*groups)
+print("Levene's Test p-value:", levene_test.pvalue)
+
+formula = 'Workers ~ C(MaritalStatus) * C(Industry)'
+
+model = ols(formula, data=femwo).fit()
+anova_table = sm.stats.anova_lm(model, typ=2)
+print("Two-way ANOVA Results:")
+print(anova_table)
+residuals = model.resid
+femwo['residuals'] = residuals
+groups = [group['residuals'].values for name, group in femwo.groupby(['MaritalStatus', 'Industry'])]
+levene_test = stats.levene(*groups)
+print("\nLevene's Test for Homogeneity of Variance:")
+print("Levene's Test p-value:", levene_test.pvalue)
+
+res=three_way_anova.resid
+femwo["residuals"]=res
+groups=[groups["residuals"].values for name,group in femwo.groupby(["MaritalStatus","Industry","Region"])]
+levene_tests=stats.levene(*groups)
+print(levene_tests.pvalue)
+
+#LOGISTIC REGRESSION MODEL TO PREDICT EMPLOYMENT BASED ON MARITAL STATUS AFTER COMPARING AGRICULTURAL AND NON AGRICULTURAL
+
+#APPLYING LOGISTIC INDIVIDUALLY WE REALISE WE NEED TO GROUP TOGETHER INDUSTRIES FOR A MORE ACCURATE RESULT
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+
+target_variable = 'Industry'
+independent_columns = ['Region', 'MaritalStatus', 'Total/Rural/Urban']
+
+tar="MaritalStatus"
+ind=['Region', 'Industry', 'Total/Rural/Urban']
+
+encoder = OneHotEncoder(handle_unknown='ignore')
+encoded_features = encoder.fit_transform(femwo[independent_columns]).toarray()
+encoded_features = encoder.fit_transform(femwo[ind]).toarray()
+
+y = femwo[tar]
+
+X_train, X_test, y_train, y_test = train_test_split(encoded_features, y, test_size=0.3, random_state=42)
+
+regularization_strength = 0.5  
+
+solver = 'sag'  
+
+
+logistic_model = LogisticRegression(
+    multi_class='multinomial',
+    solver=solver,
+    C=regularization_strength,
+    max_iter=1000, 
+    random_state=42)
+
+logistic_model = LogisticRegression(multi_class='multinomial', solver='lbfgs', max_iter=1000, random_state=42)
+logistic_model.fit(X_train, y_train)
+
+y_pred = logistic_model.predict(X_test)
+print("Multinomial Logistic Regression:")
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+
+
+
+model_data=pd.read_csv("INDIA.csv")
+
+agricultural_industries = ['A - Cultivators', 'A - Agricultural Labourers','A - Plantation, Livestock, Forestry, Fishing, Hunting and Allied Activities']
+non_agricultural_industries = ['B', 'C - HHI', 'C - Non HHI', 'D & E', 'F', 'G - HHI', 'G - Non HHI','H', 'I', 'J - HHI', 'J - Non HHI', 'K to M', 'N to O', 'P to Q','R to U - HHI', 'R to U - Non HHI']
+
+regions={"State - Andaman & Nicobar Islands":"South","State - Andhra Pradesh":"South","State - Arunachal Pradesh":"East","State - Assam":"East","State - Bihar":"North","State - Chandigarh":"North","State - Chhattisgarh":"Central","State - Dadra & Nagar Haveli":"West","State - Daman & Diu":"West","State - Goa":"West","State - Gujarat":"West","State - Haryana":"North","State - Himachal Pradesh":"North","State - Jammu & Kashmir":"North","State - Jharkhand":"North","State - Karnataka":"South","State - Kerala":"South","State - Lakshadweep":"South","State - Madhya Pradesh":"Central","State - Maharashtra":"West","State - Manipur":"East","State - Meghalaya":"East","State - Mizoram":"East","State - NCT of Delhi":"North","State - Nagaland":"East","State - Odisha":"East","State - Puducherry":"South","State - Punjab":"North","State - Rajasthan":"North","State - Sikkim":"East","State - Tamil Nadu":"South","State - Tripura":"East","State - Uttar Pradesh":"North","State - Uttarakhand":"North","State - West Bengal":"East"}
+model_data["Region"] = model_data["Area Name"].map(regions)
+    
+
+model_data['Agricultural Workers'] = model_data[agricultural_industries].sum(axis=1)
+model_data['Non-Agricultural Workers'] = model_data[non_agricultural_industries].sum(axis=1)
+model_data['Employment Type'] = model_data['Agricultural Workers']+ model_data['Non-Agricultural Workers']
+model_data['Employment Type'] = model_data['Employment Type'].apply(lambda x: 2 if x > 100 else (1 if x > 0 else 0))
+model_data['Marital Status'] = model_data['Marital Status'].astype('category').cat.codes
+model_data=model_data[model_data["Employment Type"]!=0]
+model_data.groupby("Employment Type").size()
+
+
+ind=['Region','Total/Rural/Urban','Female Main Workers/Marginal Workers']
+encoder = OneHotEncoder(handle_unknown='ignore')
+encoded_features = encoder.fit_transform(model_data[ind]).toarray()
+encoded_features = encoder.fit_transform(model_data[ind]).toarray()
+
+
+X = model_data[['Marital Status',"Region",'Total/Rural/Urban','Female Main Workers/Marginal Workers']]
+y = model_data['Employment Type']
+
+from imblearn.over_sampling import SMOTE
+smote = SMOTE()
+X_resampled, y_resampled = smote.fit_resample(X, y)
+y_resampled.value_counts()
+
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+log_reg_multi = LogisticRegression(multi_class='multinomial', solver='lbfgs')
+log_reg_multi.fit(X_train, y_train)
+
+y_pred = log_reg_multi.predict(X_test)
+
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+print('Model fitted and evaluated.')
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+
+plt.figure(figsize=(8, 8))
+plt.imshow(confusion_matrix(y_test, y_pred), cmap='Reds', interpolation='nearest')
+plt.colorbar()
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix for MLR')
+plt.show()
+
+report = classification_report(y_test, y_pred, output_dict=True)
+report_df = pd.DataFrame(report).transpose()
+report_df = report_df[:-1]
+plt.figure(figsize=(10, 6))
+sns.heatmap(report_df, annot=True, cmap='Reds', cbar=True, fmt='.2f')
+plt.title('Classification Report Heatmap for MLR')
+plt.show()
+
+#MLP
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+from sklearn.neural_network import MLPClassifier
+
+mlp = MLPClassifier(hidden_layer_sizes=(100,), activation='relu', solver='adam', random_state=42)
+mlp.fit(X_train, y_train)
+y_pred = mlp.predict(X_test)
+
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+print('Model fitted and evaluated.')
+
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+
+# Plot the confusion matrix
+plt.figure(figsize=(8, 8))
+plt.imshow(confusion_matrix(y_test, y_pred), cmap='Reds', interpolation='nearest')
+plt.colorbar()
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix for MLP')
+plt.show()
+
+
+report = classification_report(y_test, y_pred, output_dict=True)
+report_df = pd.DataFrame(report).transpose()
+report_df = report_df[:-1]
+plt.figure(figsize=(10, 6))
+sns.heatmap(report_df, annot=True, cmap='Reds', cbar=True, fmt='.2f')
+plt.title('Classification Report Heatmap for MLP')
+plt.show()
+
+from sklearn.svm import SVC
+svm = SVC()
+svm.fit(X_train,y_train)
+y_pred = svm.predict(X_test)
+print("SVM Classifier:")
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+print(accuracy_score(y_test,y_pred))
+
+#APPLYING MLP AND SVM CLASSIFIERS FOR PREDICTED MARITAL STATUS
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+from sklearn.metrics import classification_report, accuracy_score, plot_roc_curve
+import warnings
+warnings.filterwarnings('ignore')
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+import matplotlib.pyplot as plt
+
+regions={"State - Andaman & Nicobar Islands":"South","State - Andhra Pradesh":"South","State - Arunachal Pradesh":"East","State - Assam":"East","State - Bihar":"North","State - Chandigarh":"North","State - Chhattisgarh":"Central","State - Dadra & Nagar Haveli":"West","State - Daman & Diu":"West","State - Goa":"West","State - Gujarat":"West","State - Haryana":"North","State - Himachal Pradesh":"North","State - Jammu & Kashmir":"North","State - Jharkhand":"North","State - Karnataka":"South","State - Kerala":"South","State - Lakshadweep":"South","State - Madhya Pradesh":"Central","State - Maharashtra":"West","State - Manipur":"East","State - Meghalaya":"East","State - Mizoram":"East","State - NCT of Delhi":"North","State - Nagaland":"East","State - Odisha":"East","State - Puducherry":"South","State - Punjab":"North","State - Rajasthan":"North","State - Sikkim":"East","State - Tamil Nadu":"South","State - Tripura":"East","State - Uttar Pradesh":"North","State - Uttarakhand":"North","State - West Bengal":"East"}
+model_data["Region"] = model_data["Area Name"].map(regions)
+
+model_data=model_data[model_data["Total/Rural/Urban"]!="Total"]
+model_data=model_data[model_data['Female Main Workers/Marginal Workers']!="Total Female Workers"]
+model_data=model_data[model_data["Marital Status"]!="Total"]
+model_data=model_data[model_data["Area Name"]!="India"]
+
+target_variable = 'Marital Status'
+independent_columns = ['Area Name','Region', 'Total/Rural/Urban','Female - Population', 'Total Female - Main/Marginal Workers']
+
+
+X = model_data[independent_columns]
+y = model_data[target_variable]
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+
+categorical_columns = ['Area Name','Region', 'Total/Rural/Urban','Female - Population', 'Total Female - Main/Marginal Workers']
+onehot_encoder = ColumnTransformer([
+    ('onehot', OneHotEncoder(handle_unknown='ignore'), categorical_columns)
+], remainder='passthrough')
+
+
+mlp_model = Pipeline([
+    ('onehot', onehot_encoder),
+    ('mlp', MLPClassifier(random_state=42, max_iter=1000))
+])
+
+mlp_model.fit(X_train, y_train)
+y_pred = mlp_model.predict(X_test)
+
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+print(accuracy_score(y_test,y_pred))
+
+
+plt.figure(figsize=(8, 8))
+plt.imshow(confusion_matrix(y_test, y_pred), cmap='Blues', interpolation='nearest')
+plt.colorbar()
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix')
+plt.show()
+
+
+y_probs = mlp_model.predict_proba(X_test)
+
+
+classes = mlp_model.classes_
+
+
+plt.figure(figsize=(8, 8))
+for idx, class_label in enumerate(classes):
+    fpr, tpr, thresholds = roc_curve(y_test == class_label, y_probs[:, idx])
+    roc_auc = auc(fpr, tpr)
+    plt.plot(fpr, tpr, label=f'Class {class_label} (AUC = {roc_auc:.2f})')
+
+
+plt.plot([0, 1], [0, 1], 'k--')
+
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC Curves for Each Class')
+plt.legend(loc='best')
+plt.show()
+
+svm_model = Pipeline([
+    ('onehot', onehot_encoder),
+    ('svm', SVC(random_state=42, max_iter=1000))
+])
+
+
+svm_model.fit(X_train, y_train)
+y_pred = svm_model.predict(X_test)
+print("SVM Classifier:")
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+print(accuracy_score(y_test,y_pred))
+
+plt.figure(figsize=(8, 6))
+ax = plt.gca()
+plot_roc_curve(mlp_model, X_test, y_test, ax=ax, name='MLP Classifier')
+plot_roc_curve(svm_model, X_test, y_test, ax=ax, name='SVM Classifier')
+plt.title('ROC Curves')
+plt.legend(loc='lower right')
+plt.show()
